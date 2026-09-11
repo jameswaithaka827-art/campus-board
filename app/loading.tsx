@@ -1,0 +1,1 @@
+export default function Loading(){return <main className="min-h-screen grid place-items-center bg-slate-950 text-slate-100"><div className="text-center"><div className="mx-auto h-10 w-10 animate-spin rounded-full border-4 border-white/10 border-t-indigo-400"/><p className="mt-4 text-sm text-slate-400">Opening James AI…</p></div></main>}

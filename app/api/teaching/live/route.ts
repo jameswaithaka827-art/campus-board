@@ -1,0 +1,9 @@
+import { assertSameOrigin } from "@/lib/request-security";
+import crypto from "node:crypto";
+import { NextRequest, NextResponse } from "next/server";
+import { getServerSession } from "next-auth";
+import { authOptions } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
+import { requireTeachingUser } from "@/lib/role-access";
+export async function POST(req:NextRequest){const origin=assertSameOrigin(req);if(!origin.ok)return NextResponse.json({error:origin.reason},{status:403});const session=await getServerSession(authOptions);if(!session?.user?.id)return NextResponse.json({error:'Unauthorized'},{status:401});try{await requireTeachingUser(session.user.id)}catch{return NextResponse.json({error:'Forbidden'},{status:403})};const b=await req.json().catch(()=>({}));const courseId=typeof b.courseId==='string'?b.courseId:'';const title=typeof b.title==='string'?b.title.trim().slice(0,180):'';const provider=typeof b.provider==='string'?b.provider:'';const joinUrl=typeof b.joinUrl==='string'?b.joinUrl.trim().slice(0,2000):'';
+const zoomSessionName=provider==='zoom' ? `jamesai_${crypto.randomBytes(8).toString('hex')}` : null;const scheduledAt=typeof b.scheduledAt==='string'?new Date(b.scheduledAt):null; if(!courseId||!title||!['zoom','youtube','whatsapp','external'].includes(provider)||(provider!=='zoom'&&!joinUrl)||!scheduledAt||Number.isNaN(scheduledAt.getTime()))return NextResponse.json({error:'Course, title, provider, join URL and valid date are required.'},{status:400});const course=await prisma.course.findUnique({where:{id:courseId,instructorId:session.user.id}});if(!course)return NextResponse.json({error:'Course not found'},{status:404});const liveClass=await prisma.liveClass.create({data:{courseId,title,provider,joinUrl: provider==='zoom' ? `zoom:${zoomSessionName}` : joinUrl, zoomSessionName, scheduledAt}});return NextResponse.json({liveClass},{status:201});}

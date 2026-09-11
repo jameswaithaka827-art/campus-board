@@ -1,0 +1,12 @@
+"use client";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
+
+export default function VerifyEmailPage(){
+ const router=useRouter(); const { update }=useSession();
+ const [code,setCode]=useState(""); const [message,setMessage]=useState("A 6-digit verification code was sent to your Google email."); const [error,setError]=useState(""); const [loading,setLoading]=useState(false);
+ async function verify(e:React.FormEvent){e.preventDefault();setLoading(true);setError("");const res=await fetch("/api/auth/verify-email/confirm",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({code})});const data=await res.json().catch(()=>({}));if(!res.ok){setLoading(false);setError(data.error||"Verification failed.");return;}await update();router.push("/dashboard");router.refresh();}
+ async function resend(){setError("");const res=await fetch("/api/auth/verify-email/request",{method:"POST"});const data=await res.json().catch(()=>({}));if(res.ok)setMessage("A new verification code has been sent.");else setError(data.error||"Could not send a new code.");}
+ return <main className="min-h-screen grid place-items-center px-6 py-12"><div className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-8 shadow-2xl"><div className="h-12 w-12 rounded-2xl bg-brand-500/15 grid place-items-center text-brand-300 font-bold">✓</div><p className="text-sm text-brand-300 mt-6">Secure account setup</p><h1 className="text-3xl font-bold mt-1">Verify your email</h1><p className="text-white/50 text-sm mt-3">{message}</p><form onSubmit={verify} className="mt-7 space-y-4"><input inputMode="numeric" autoComplete="one-time-code" maxLength={6} value={code} onChange={e=>setCode(e.target.value.replace(/\D/g,"").slice(0,6))} className="w-full rounded-2xl bg-black/30 border border-white/10 px-4 py-4 text-center text-3xl tracking-[0.5em] outline-none focus:border-brand-500" placeholder="000000" required /><button disabled={loading||code.length!==6} className="w-full rounded-2xl bg-brand-600 py-3 font-semibold disabled:opacity-50">{loading?"Verifying…":"Verify email"}</button></form>{error&&<p className="text-sm text-red-400 mt-4">{error}</p>}<button onClick={resend} className="w-full mt-4 rounded-2xl border border-white/10 py-3 text-sm text-white/70 hover:text-white">Send another code</button><p className="text-xs text-white/30 mt-6 text-center">Never share your verification code with anyone.</p></div></main>;
+}

@@ -1,0 +1,2 @@
+import {NextResponse} from "next/server";import {requireAdmin} from "@/lib/admin";import {prisma} from "@/lib/prisma";
+export async function GET(){const gate=await requireAdmin();if(!gate.ok)return gate.response;const logs=await prisma.adminAuditLog.findMany({orderBy:{createdAt:'desc'},take:50,select:{id:true,action:true,targetUserId:true,metadata:true,createdAt:true,adminUser:{select:{email:true}}}});return NextResponse.json({logs});}

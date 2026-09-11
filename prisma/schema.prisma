@@ -1,0 +1,562 @@
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model User {
+  id                   String   @id @default(cuid())
+  email                String   @unique
+  passwordHash         String?
+  name                 String?
+  avatarUrl             String?
+  createdAt            DateTime @default(now())
+  googleId             String?  @unique
+  emailVerifiedAt      DateTime?
+  emailVerificationCompletedAt DateTime?
+  schoolIdVerificationStatus String @default("not_submitted")
+  schoolIdDocumentPath String?
+  schoolIdSubmittedAt DateTime?
+  schoolIdReviewedAt DateTime?
+  schoolIdRejectionReason String?
+  schoolIdVerifiedAt DateTime?
+  timeZone             String   @default("Africa/Nairobi")
+  chatUsageMonth       String?
+  accountStatus        String   @default("active")
+  sessionVersion       Int      @default(1)
+  lastLoginAt          DateTime?
+  passwordUpdatedAt    DateTime?
+
+  // student | teacher | lecturer | doctor | business | gym | admin | null
+  role                 String?
+
+  stripeCustomerId     String?  @unique
+  stripeSubscriptionId String?  @unique
+  subscriptionStatus   String?  // e.g. "active", "canceled", null = free tier
+  subscriptionProvider String?  // stripe | pesapal | google_play | apple
+  chatMessageCount     Int      @default(0)
+
+  chatMessages         ChatMessage[]
+  timeEntries          TimeEntry[]
+  notes                Note[]
+  scheduleBlocks       ScheduleBlock[]
+  pushSubscriptions    PushSubscription[]
+  verificationCodes    EmailVerificationCode[]
+  loginVerificationCodes LoginVerificationCode[]
+  adminAuditLogs       AdminAuditLog[] @relation("AdminActor")
+  courses              Course[] @relation("CourseInstructor")
+  enrollments          CourseEnrollment[]
+  lessonProgress       LessonProgress[]
+  passwordResetTokens  PasswordResetToken[]
+  securityEvents       SecurityEvent[]
+  studentProfile       StudentProfile?
+  initiatedConnections StudentConnection[] @relation("ConnectionInitiator")
+  receivedConnections  StudentConnection[] @relation("ConnectionReceiver")
+  roomMemberships      CommunityRoomMember[]
+  communityMessages    CommunityMessage[]
+  marketplaceListings  MarketplaceListing[]
+  marketplaceWatches   MarketplaceWatch[]
+  marketplaceReports   MarketplaceReport[]
+  blockedUsers         UserBlock[] @relation("Blocker")
+  blockedByUsers       UserBlock[] @relation("Blocked")
+  reportsMade          CommunityReport[] @relation("Reporter")
+  reportsReceived      CommunityReport[] @relation("Reported")
+  schoolIdVerifications SchoolIdVerification[] @relation("VerificationSubject")
+  schoolVerificationReviews SchoolIdVerification[] @relation("VerificationReviewer")
+  communityPosts       CommunityPost[]
+  communityPostLikes   CommunityPostLike[]
+  communityPostComments CommunityPostComment[]
+  communityPostViews   CommunityPostView[]
+  communityPostShares  CommunityPostShare[]
+  paymentTransactions  PaymentTransaction[]
+}
+
+// Persists every chat turn so past conversations can be reloaded and reviewed.
+model ChatMessage {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      String   // "user" | "assistant"
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// Simple time-tracking: one row per task session (start, optional stop).
+model TimeEntry {
+  id            String    @id @default(cuid())
+  userId        String
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  taskName      String
+  startedAt     DateTime  @default(now())
+  endedAt       DateTime?
+
+  @@index([userId, startedAt])
+}
+
+// Role-flavored notes: patient notes (doctor), lesson plans (teacher),
+// meeting notes (business). One flexible model, label/behavior driven by
+// the user's role at read-time.
+model Note {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title     String
+  content   String
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+// A recurring weekly timetable block: "Mondays 9:00-10:30, Ward rounds".
+// day is 0=Monday .. 6=Sunday (matches how the planner UI lays out the week).
+// One row per recurring slot — it repeats every week, it isn't a one-off
+// calendar event with a specific date.
+model ScheduleBlock {
+  id             String    @id @default(cuid())
+  userId         String
+  user           User      @relation(fields: [userId], references: [id])
+  day            Int       // 0=Monday, 1=Tuesday, ... 6=Sunday
+  startTime      String    // "HH:MM", 24h, e.g. "09:00"
+  endTime        String    // "HH:MM", 24h, e.g. "10:30"
+  title          String
+  category       String?   // free text, e.g. "class", "shift", "workout", "appointment"
+  notify         Boolean   @default(false)
+  // Date (not time) this block last fired a push notification, so the
+  // reminder cron (see api/cron/send-reminders) doesn't send the same
+  // day's reminder twice if it runs more than once inside the window.
+  lastNotifiedAt DateTime?
+  createdAt      DateTime  @default(now())
+
+  @@index([userId, day])
+}
+
+// A browser/device's Web Push subscription. A user can have more than one
+// (e.g. laptop + phone), so notifications go out to all of them.
+model PushSubscription {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+
+model EmailVerificationCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+// Second factor for password-based login (Google login already has strong
+// security from Google itself, so this only applies to the Credentials
+// provider). Separate from EmailVerificationCode so a pending login 2FA
+// code can never be confused with an account's one-time signup verification.
+model LoginVerificationCode {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model AdminAuditLog {
+  id           String   @id @default(cuid())
+  adminUserId  String
+  adminUser    User     @relation("AdminActor", fields: [adminUserId], references: [id], onDelete: Cascade)
+  action       String
+  targetUserId String?
+  metadata     String?
+  createdAt    DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([targetUserId, createdAt])
+}
+
+model Course {
+  id             String   @id @default(cuid())
+  instructorId   String
+  instructor     User     @relation("CourseInstructor", fields: [instructorId], references: [id], onDelete: Restrict)
+  title          String
+  description    String
+  subject        String
+  thumbnailUrl   String?
+  published      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  lessons        Lesson[]
+  enrollments    CourseEnrollment[]
+  liveClasses    LiveClass[]
+
+  @@index([instructorId, published])
+}
+
+model Lesson {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  summary     String?
+  content     String
+  videoUrl    String?
+  position    Int      @default(0)
+  published   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  progress    LessonProgress[]
+
+  @@index([courseId, position])
+}
+
+model CourseEnrollment {
+  id         String   @id @default(cuid())
+  courseId   String
+  userId     String
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([courseId, userId])
+  @@index([userId, createdAt])
+}
+
+model LessonProgress {
+  id          String   @id @default(cuid())
+  lessonId    String
+  userId      String
+  completed   Boolean  @default(false)
+  updatedAt   DateTime @updatedAt
+  lesson      Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([lessonId, userId])
+  @@index([userId, updatedAt])
+}
+
+model LiveClass {
+  id          String   @id @default(cuid())
+  courseId    String
+  course      Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  title       String
+  provider    String   // zoom | youtube | whatsapp | external
+  joinUrl     String
+  scheduledAt DateTime
+  durationMin Int      @default(60)
+  recordingUrl String?
+  zoomSessionName String?
+  status      String   @default("scheduled")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([courseId, scheduledAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([expiresAt])
+}
+
+model PaymentTransaction {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String   // stripe | pesapal | google_play | apple | other
+  type              String   // subscription | marketplace | other
+  reference         String   @unique
+  amountKsh         Int
+  currency          String   @default("KES")
+  status            String   @default("pending") // pending | paid | failed | refunded | cancelled
+  product           String?
+  metadata          String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId, createdAt])
+  @@index([provider, status, createdAt])
+}
+
+model SecurityEvent {
+  id        String   @id @default(cuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  type      String
+  ipHash    String?
+  userAgent String?
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([type, createdAt])
+}
+
+
+model StudentProfile {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  courseOfStudy   String
+  yearOfStudy     String?
+  studyInterests  String   // JSON string array
+  sports          String   // JSON string array
+  studyMode       String?  // solo | group | both
+  bio             String?
+  matchOptIn      Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([courseOfStudy, yearOfStudy])
+}
+
+model StudentConnection {
+  id          String   @id @default(cuid())
+  requesterId String
+  receiverId  String
+  status      String   @default("pending") // pending | accepted | declined | blocked
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  requester   User     @relation("ConnectionInitiator", fields: [requesterId], references: [id], onDelete: Cascade)
+  receiver    User     @relation("ConnectionReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
+
+  @@unique([requesterId, receiverId])
+  @@index([receiverId, status])
+}
+
+model CommunityRoom {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  topic       String
+  course      String?
+  maxMembers  Int      @default(100)
+  isPublic    Boolean  @default(true)
+  isLive      Boolean  @default(false)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  members     CommunityRoomMember[]
+  messages    CommunityMessage[]
+  postShares  CommunityPostShare[]
+
+  @@index([topic, course, isLive])
+}
+
+model CommunityRoomMember {
+  id        String   @id @default(cuid())
+  roomId    String
+  userId    String
+  joinedAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  room      CommunityRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([roomId, userId])
+  @@index([roomId, lastSeenAt])
+}
+
+model CommunityMessage {
+  id         String   @id @default(cuid())
+  roomId     String
+  userId     String
+  content    String
+  createdAt  DateTime @default(now())
+  room       CommunityRoom @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, createdAt])
+}
+
+model CommunityReport {
+  id          String   @id @default(cuid())
+  reporterId  String
+  reportedId  String
+  postId      String?
+  roomId      String?
+  reason      String
+  details     String?
+  status      String   @default("open")
+  createdAt   DateTime @default(now())
+  reporter    User     @relation("Reporter", fields: [reporterId], references: [id], onDelete: Cascade)
+  reported    User     @relation("Reported", fields: [reportedId], references: [id], onDelete: Cascade)
+  post        CommunityPost? @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@index([reportedId, status])
+  @@index([postId, status])
+}
+
+model UserBlock {
+  id        String   @id @default(cuid())
+  blockerId String
+  blockedId String
+  createdAt DateTime @default(now())
+  blocker   User     @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  blocked   User     @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+
+  @@unique([blockerId, blockedId])
+  @@index([blockedId])
+}
+
+model MarketplaceListing {
+  id          String   @id @default(cuid())
+  sellerId    String
+  title       String
+  description String
+  category    String   // books | electronics | fashion | food | housing | services | jobs | events | lostfound
+  priceKsh    Int?
+  images      String   @default("[]") // JSON array of image URLs (Vercel Blob, public), first = cover
+  condition   String?  // new | like_new | good | fair | refurbished (books/electronics/fashion)
+  serviceType String?  // salon | barber | laundry | tutoring | repair | photography | cleaning | other (services only)
+  mealType    String?  // breakfast | lunch | dinner | snacks | drinks | baked (food only)
+  status      String   @default("active") // active | sold | expired
+  boostTier   String?  // basic | standard | premium — null = not boosted
+  boostExpiresAt DateTime?
+  viewCount   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  seller      User     @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+
+  watchedBy   MarketplaceWatch[]
+  reports     MarketplaceReport[]
+
+  @@index([category, status, createdAt])
+  @@index([status, boostTier, boostExpiresAt])
+}
+
+// One row per student who saved a listing to their watchlist.
+model MarketplaceWatch {
+  id        String   @id @default(cuid())
+  userId    String
+  listingId String
+  createdAt DateTime @default(now())
+  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, listingId])
+  @@index([userId])
+}
+
+// A report against a listing (scam, inappropriate, etc.) — surfaces in the
+// existing admin panel's reports view alongside community reports.
+model MarketplaceReport {
+  id         String   @id @default(cuid())
+  listingId  String
+  reporterId String
+  reason     String
+  details    String?
+  status     String   @default("pending") // pending | resolved | dismissed
+  createdAt  DateTime @default(now())
+  listing    MarketplaceListing @relation(fields: [listingId], references: [id], onDelete: Cascade)
+  reporter   User               @relation(fields: [reporterId], references: [id], onDelete: Cascade)
+
+  @@index([status, createdAt])
+}
+
+
+model SchoolIdVerification {
+  id              String   @id @default(cuid())
+  userId          String
+  documentPath    String
+  status          String   @default("pending")
+  submittedAt     DateTime @default(now())
+  reviewedAt      DateTime?
+  reviewedById    String?
+  rejectionReason String?
+  user            User     @relation("VerificationSubject", fields: [userId], references: [id], onDelete: Cascade)
+  reviewer        User?    @relation("VerificationReviewer", fields: [reviewedById], references: [id], onDelete: SetNull)
+  @@index([status, submittedAt])
+  @@index([userId, submittedAt])
+}
+
+model CommunityPost {
+  id          String   @id @default(cuid())
+  authorId    String
+  content     String
+  course      String?
+  visibility  String   @default("community")
+  imageUrls   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  author      User     @relation(fields: [authorId], references: [id], onDelete: Cascade)
+  likes       CommunityPostLike[]
+  comments    CommunityPostComment[]
+  views       CommunityPostView[]
+  shares      CommunityPostShare[]
+  reports     CommunityReport[]
+  @@index([createdAt])
+  @@index([course, createdAt])
+  @@index([authorId, createdAt])
+}
+
+model CommunityPostLike {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([postId, userId])
+  @@index([postId, createdAt])
+}
+
+model CommunityPostComment {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([postId, createdAt])
+}
+
+model CommunityPostView {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  createdAt DateTime @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@unique([postId, userId])
+  @@index([postId, createdAt])
+}
+
+model CommunityPostShare {
+  id        String   @id @default(cuid())
+  postId    String
+  userId    String
+  roomId    String?
+  note      String?
+  createdAt DateTime @default(now())
+  post      CommunityPost @relation(fields: [postId], references: [id], onDelete: Cascade)
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  room      CommunityRoom? @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  @@index([postId, createdAt])
+  @@index([roomId, createdAt])
+}

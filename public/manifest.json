@@ -1,0 +1,15 @@
+{
+  "name": "James AI — Student & Teaching Workspace",
+  "short_name": "James AI",
+  "description": "AI-powered student learning, planning, notes, courses and teaching workspace.",
+  "start_url": "/dashboard",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#020617",
+  "theme_color": "#020617",
+  "icons": [
+    { "src": "/icon.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}

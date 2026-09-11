@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&display=swap');
+
+:root {
+  color-scheme: dark;
+  --ja-brand: #e3a73b;
+  --ja-acacia: #2f6f5c;
+  --ja-bg: #14171f;
+  --ja-panel: rgba(244, 239, 228, .035);
+  --ja-line: rgba(244, 239, 228, .09);
+}
+
+html { scroll-behavior: smooth; }
+body {
+  margin: 0;
+  background:
+    radial-gradient(ellipse 900px 500px at 20% -10%, rgba(227,167,59,.10), transparent 55%),
+    var(--ja-bg);
+  color: #f4efe4;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+button, input, textarea, select { font: inherit; }
+* { box-sizing: border-box; }
+::selection { background: rgba(227,167,59,.32); }
+button, a, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible { outline: 2px solid rgba(227,167,59,.55); outline-offset: 2px; }
+
+a { transition: color .18s ease, background-color .18s ease, border-color .18s ease, transform .18s ease; }
+
+.font-display { font-family: "Fraunces", ui-serif, Georgia, serif; }
+
+/* A short status/category label — kept compact and quiet rather than loud
+   template chrome, since these carry real information (role, verification
+   state, section name). */
+.eyebrow { font-size: .72rem; letter-spacing: .1em; color: #eec476; font-weight: 600; }
+
+.hero-surface {
+  background: linear-gradient(160deg, rgba(227,167,59,.10), rgba(20,23,31,.94) 55%, rgba(20,23,31,.98));
+  border: 1px solid var(--ja-line);
+  box-shadow: 0 30px 80px rgba(0,0,0,.35);
+}
+.glass-panel { border: 1px solid var(--ja-line); background: var(--ja-panel); backdrop-filter: blur(14px); }
+
+/* Quiet, hairline-first cards — one restrained shadow, not a stacked
+   gradient-plus-glow-plus-shadow treatment on every surface. */
+.stat-card { border: 1px solid var(--ja-line); border-radius: .85rem; background: rgba(244,239,228,.03); padding: 1.1rem; }
+.feature-card { border: 1px solid var(--ja-line); border-radius: .95rem; background: rgba(244,239,228,.025); padding: 1.25rem; transition: border-color .2s ease, background .2s ease; }
+.feature-card:hover { background: rgba(244,239,228,.045); border-color: rgba(227,167,59,.35); }
+
+.verified-pill { display: inline-flex; align-items: center; gap: .3rem; border: 1px solid rgba(127,181,163,.35); background: rgba(47,111,92,.14); color: #9bcfbc; border-radius: 999px; padding: .25rem .6rem; font-size: .7rem; font-weight: 600; }
+.mini-label { font-size: .68rem; letter-spacing: .08em; color: #8a8578; font-weight: 600; }
+.soft-grid { background-image: linear-gradient(rgba(244,239,228,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(244,239,228,.035) 1px, transparent 1px); background-size: 24px 24px; }
+.kpi-glow { box-shadow: 0 0 0 1px rgba(227,167,59,.06); }
+
+/* Sidebar: a left rule on the active item reads as "you are here" more
+   clearly than a full gradient wash, and stays quiet against everything else. */
+.sidebar-item { display:flex; align-items:center; gap:.75rem; border-radius: .65rem; padding: .68rem .8rem; color:#a39d8c; border-left: 2px solid transparent; }
+.sidebar-item:hover { background: rgba(244,239,228,.035); color:#f4efe4; }
+.sidebar-item.active { background: rgba(227,167,59,.09); color:#f9e8c2; border-left: 2px solid #e3a73b; }
+
+.mobile-dock { box-shadow: 0 -12px 30px rgba(0,0,0,.3); }

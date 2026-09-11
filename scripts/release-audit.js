@@ -1,0 +1,17 @@
+const fs=require('fs'),path=require('path');
+const root=process.cwd();
+const required=['app/page.tsx','app/demo/page.tsx','app/dashboard/layout.tsx','app/admin/page.tsx','app/api/auth/[...nextauth]/route.ts','app/api/community/verification/route.ts','prisma/schema.prisma','public/manifest.json','.env.example'];
+const checks=[];
+for(const f of required) checks.push([f,fs.existsSync(path.join(root,f))]);
+const pkg=JSON.parse(fs.readFileSync(path.join(root,'package.json'),'utf8'));
+checks.push(['Next.js 15.5.24',pkg.dependencies?.next==='15.5.24']);
+checks.push(['Google provider',fs.readFileSync(path.join(root,'lib/auth.ts'),'utf8').includes('GoogleProvider')]);
+checks.push(['Strong password policy',fs.existsSync(path.join(root,'lib/password-policy.ts'))]);
+checks.push(['School-ID verification',fs.existsSync(path.join(root,'app/api/community/verification/route.ts'))]);
+checks.push(['Community safety',fs.existsSync(path.join(root,'app/api/community/report/route.ts'))]);
+checks.push(['Account deletion',fs.existsSync(path.join(root,'app/api/account/delete/route.ts'))]);
+checks.push(['Demo mode',fs.readFileSync(path.join(root,'app/demo/page.tsx'),'utf8').includes('Presentation mode')]);
+const failed=checks.filter(([,ok])=>!ok);
+console.log(`Release audit: ${checks.length-failed.length}/${checks.length} checks passed`);
+for(const [name,ok] of checks) console.log(`${ok?'PASS':'FAIL'}  ${name}`);
+if(failed.length) process.exit(1);
