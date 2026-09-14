@@ -27,7 +27,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const body = await req.json().catch(() => ({}));
 
   const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
-  if (!listing || listing.userId !== gate.user.id) {
+  if (!listing || listing.sellerId !== gate.user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
@@ -49,7 +49,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params;
 
   const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
-  if (!listing || listing.userId !== gate.user.id) {
+  if (!listing || listing.sellerId !== gate.user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
