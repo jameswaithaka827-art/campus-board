@@ -1,0 +1,10 @@
+"use client";
+import { useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { generateStrongPassword } from "@/lib/password-client";
+
+export default function ResetPasswordPage(){
+ const params=useSearchParams(); const token=params.get("token")||""; const [password,setPassword]=useState(""); const [confirm,setConfirm]=useState(""); const [status,setStatus]=useState("");
+ async function submit(e:React.FormEvent){e.preventDefault();setStatus(""); if(password!==confirm){setStatus("Passwords do not match.");return;} const r=await fetch("/api/account/password/reset",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({token,password,confirmPassword:confirm})}); const d=await r.json().catch(()=>({})); setStatus(r.ok?"Password updated. You can now sign in.":d.error||"Could not reset password.");}
+ return <main className="min-h-screen bg-slate-950 text-slate-100 grid place-items-center px-4"><form onSubmit={submit} className="w-full max-w-md rounded-3xl border border-white/10 bg-white/[0.04] p-7 space-y-4"><div><p className="text-sm text-brand-300">Account security</p><h1 className="text-2xl font-bold mt-1">Create a new password</h1><p className="text-sm text-slate-400 mt-2">Use at least 14 characters with uppercase, lowercase, number and symbol.</p></div><input value={password} onChange={e=>setPassword(e.target.value)} type="password" required minLength={14} placeholder="New password" className="w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3"/><input value={confirm} onChange={e=>setConfirm(e.target.value)} type="password" required minLength={14} placeholder="Confirm password" className="w-full rounded-xl bg-black/20 border border-white/10 px-4 py-3"/><div className="flex gap-2"><button type="button" onClick={()=>setPassword(generateStrongPassword())} className="flex-1 rounded-xl border border-white/10 px-3 py-2.5 text-sm">Generate strong password</button><button className="flex-1 rounded-xl bg-brand-600 px-3 py-2.5 text-sm font-semibold">Reset password</button></div>{status&&<p className="text-sm text-slate-300">{status}</p>}</form></main>;
+}

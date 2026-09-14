@@ -1,0 +1,47 @@
+{
+  "name": "ai-saas-starter",
+  "version": "1.4.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint",
+    "postinstall": "prisma generate",
+    "db:push": "prisma db push",
+    "db:studio": "prisma studio",
+    "admin:promote": "tsx scripts/promote-admin.ts",
+    "test:security": "node scripts/security-audit.js",
+    "test:smoke": "node scripts/smoke-audit.js",
+    "test:community": "node scripts/community-security-audit.js",
+    "test:all": "node scripts/full-audit.js"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.124.0",
+    "@vercel/blob": "^2.8.0",
+    "@prisma/client": "^5.19.1",
+    "bcryptjs": "^2.4.3",
+    "next": "15.5.24",
+    "next-auth": "^4.24.15",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "stripe": "^16.9.0",
+    "web-push": "^3.6.7",
+    "nodemailer": "^7.0.7",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/node": "^20.14.2",
+    "@types/react": "^18.3.3",
+    "@types/web-push": "^3.6.4",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "prisma": "^5.19.1",
+    "tailwindcss": "^3.4.4",
+    "typescript": "^5.4.5",
+    "@types/nodemailer": "^6.4.15",
+    "tsx": "^4.19.2",
+    "@types/jsonwebtoken": "^9.0.9"
+  }
+}
