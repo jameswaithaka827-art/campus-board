@@ -3,23 +3,58 @@ import { prisma } from "@/lib/prisma";
 import { assertSameOrigin } from "@/lib/request-security";
 import { requireActiveVerifiedUser } from "@/lib/require-user";
 
-export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const listing = await prisma.marketplaceItem.findUnique({
+    where: { id },
+    include: { user: true, watches: true },
+  });
+
+  if (!listing) {
+    return NextResponse.json({ error: "Listing not found" }, { status: 404 });
+  }
+
+  return NextResponse.json(listing);
+}
+
+export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const origin = assertSameOrigin(req);
   if (!origin.ok) return NextResponse.json({ error: origin.reason }, { status: 403 });
 
   const gate = await requireActiveVerifiedUser();
   if (!gate.ok) return gate.response;
 
-  const { id: listingId } = await params;
-  const existing = await prisma.marketplaceWatch.findUnique({
-    where: { userId_listingId: { userId: gate.user.id, listingId } },
-  });
+  const { id } = await params;
+  const body = await req.json().catch(() => ({}));
 
-  if (existing) {
-    await prisma.marketplaceWatch.delete({ where: { id: existing.id } });
-    return NextResponse.json({ watching: false });
+  const listing = await prisma.marketplaceItem.findUnique({ where: { id } });
+  if (!listing || listing.userId !== gate.user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  await prisma.marketplaceWatch.create({ data: { userId: gate.user.id, listingId } });
-  return NextResponse.json({ watching: true });
+  const updated = await prisma.marketplaceItem.update({
+    where: { id },
+    data: body,
+  });
+
+  return NextResponse.json(updated);
+}
+
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const origin = assertSameOrigin(req);
+  if (!origin.ok) return NextResponse.json({ error: origin.reason }, { status: 403 });
+
+  const gate = await requireActiveVerifiedUser();
+  if (!gate.ok) return gate.response;
+
+  const { id } = await params;
+
+  const listing = await prisma.marketplaceItem.findUnique({ where: { id } });
+  if (!listing || listing.userId !== gate.user.id) {
+    return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
+  }
+
+  await prisma.marketplaceItem.delete({ where: { id } });
+
+  return NextResponse.json({ success: true });
 }
