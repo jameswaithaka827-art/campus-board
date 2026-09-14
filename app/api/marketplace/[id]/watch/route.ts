@@ -5,7 +5,7 @@ import { requireActiveVerifiedUser } from "@/lib/require-user";
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const listing = await prisma.marketplaceListings.findUnique({
+  const listing = await prisma.marketplaceListing.findUnique({
     where: { id },
     include: { user: true, watches: true },
   });
@@ -27,12 +27,12 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   const { id } = await params;
   const body = await req.json().catch(() => ({}));
 
-  const listing = await prisma.marketplaceListings.findUnique({ where: { id } });
+  const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
   if (!listing || listing.userId !== gate.user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  const updated = await prisma.marketplaceListings.update({
+  const updated = await prisma.marketplaceListing.update({
     where: { id },
     data: body,
   });
@@ -49,12 +49,12 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const { id } = await params;
 
-  const listing = await prisma.marketplaceListings.findUnique({ where: { id } });
+  const listing = await prisma.marketplaceListing.findUnique({ where: { id } });
   if (!listing || listing.userId !== gate.user.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 403 });
   }
 
-  await prisma.marketplaceListings.delete({ where: { id } });
+  await prisma.marketplaceListing.delete({ where: { id } });
 
   return NextResponse.json({ success: true });
 }
