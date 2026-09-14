@@ -7,7 +7,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   const { id } = await params;
   const listing = await prisma.marketplaceListing.findUnique({
     where: { id },
-    include: { user: true, watches: true },
   });
 
   if (!listing) {
