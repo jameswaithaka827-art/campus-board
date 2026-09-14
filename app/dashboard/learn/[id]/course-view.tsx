@@ -115,7 +115,7 @@ export default function CourseView({
                     <div className="font-medium">{lc.title}</div>
                     <div className="text-xs text-white/50 mt-1">{new Date(lc.scheduledAt).toLocaleString()}</div>
                   </div>
-                  
+                  <a
                     href={lc.joinUrl}
                     target="_blank"
                     rel="noreferrer"
