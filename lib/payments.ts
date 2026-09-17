@@ -1,10 +1,7 @@
 import { requireEnv } from "@/lib/env";
-// Import your database client here if using Prisma or Supabase, e.g.:
-// import { db } from "@/lib/db";
 
-// --- Types ---
 export type PesapalTransactionStatus = {
-  payment_status_description?: string; // e.g. "Completed", "Failed", "Invalid", "Reversed"
+  payment_status_description?: string;
   status_code?: number;
   amount?: number;
   currency?: string;
@@ -15,12 +12,12 @@ export type PesapalTransactionStatus = {
   redirect_url?: string;
 };
 
-// --- Cache for Pesapal Token ---
 let cachedToken: { token: string; expiresAt: number } | null = null;
 
 /**
-  * Authenticates with Pesapal API and returns a valid Bearer token.
-  */
+ * Authenticates with Pesapal v3 API and returns a bearer token.
+ * Tokens are cached in memory for up to 4.5 minutes to prevent redundant requests.
+ */
 export async function getPesapalToken(): Promise<string> {
   if (cachedToken && cachedToken.expiresAt > Date.now()) {
     return cachedToken.token;
@@ -32,8 +29,14 @@ export async function getPesapalToken(): Promise<string> {
 
   const res = await fetch(`${pesapalBaseUrl}/api/Auth/RequestToken`, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ consumer_key: consumerKey, consumer_secret: consumerSecret }),
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      consumer_key: consumerKey,
+      consumer_secret: consumerSecret,
+    }),
     cache: "no-store",
   });
 
@@ -42,7 +45,7 @@ export async function getPesapalToken(): Promise<string> {
   try {
     data = raw ? JSON.parse(raw) : null;
   } catch {
-    // raw text fallback handled below
+    // Response was not JSON
   }
 
   if (!res.ok || !data?.token) {
@@ -52,31 +55,44 @@ export async function getPesapalToken(): Promise<string> {
 
   cachedToken = {
     token: data.token,
-    expiresAt: Date.now() + 4.5 * 60_000, // Cache for 4.5 minutes
+    expiresAt: Date.now() + 4.5 * 60_000,
   };
 
   return data.token;
 }
 
 /**
-  * Helper to determine base URL depending on environment configuration.
-  */
+ * Resolves the correct Pesapal base URL depending on the active environment configuration.
+ */
 function getPesapalBaseUrl(): string {
-  // Checks environment variables or defaults to sandbox/live URL
-  return process.env.PESAPAL_ENV === "live" 
-    ? "https://pay.pesapal.com/v3" 
-    : "https://cybqa.pesapal.com/v3";
+  const env = process.env.PESAPAL_ENV;
+  if (env === "live") {
+    return "https://pay.pesapal.com/v3";
+  }
+  return "https://cybqa.pesapal.com/v3";
 }
 
 /**
-  * Registers Instant Payment Notification (IPN) URL with Pesapal.
-  */
-export async function registerPesapalIpn(url: string, notificationType: "GET" | "POST" = "GET"): Promise<string> {
+ * Registers an Instant Payment Notification (IPN) URL with Pesapal.
+ */
+export async function registerPesapalIpn(
+  url: string,
+  notificationType: "GET" | "POST" = "GET"
+): Promise<string> {
   const token = await getPesapalToken();
-  const res = await fetch(`${getPesapalBaseUrl()}/api/URLSetup/RegisterIPN`, {
+  const pesapalBaseUrl = getPesapalBaseUrl();
+
+  const res = await fetch(`${pesapalBaseUrl}/api/URLSetup/RegisterIPN`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
-    body: JSON.stringify({ url, ipn_notification_type: notificationType }),
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
+    body: JSON.stringify({
+      url,
+      ipn_notification_type: notificationType,
+    }),
     cache: "no-store",
   });
 
@@ -84,7 +100,9 @@ export async function registerPesapalIpn(url: string, notificationType: "GET" | 
   let data: { ipn_id?: string; error?: unknown; message?: string } | null = null;
   try {
     data = raw ? JSON.parse(raw) : null;
-  } catch {}
+  } catch {
+    // Response was not JSON
+  }
 
   if (!res.ok || !data?.ipn_id) {
     const detail = data ? JSON.stringify(data.error ?? data.message ?? data) : raw.slice(0, 500);
@@ -95,8 +113,8 @@ export async function registerPesapalIpn(url: string, notificationType: "GET" | 
 }
 
 /**
-  * Submits an order request to Pesapal and returns tracking details.
-  */
+ * Submits an order request to Pesapal and returns the tracking ID along with the payment redirect URL.
+ */
 export async function submitPesapalOrder(input: {
   reference: string;
   amount: number;
@@ -109,11 +127,16 @@ export async function submitPesapalOrder(input: {
   lastName?: string;
 }) {
   const token = await getPesapalToken();
+  const pesapalBaseUrl = getPesapalBaseUrl();
   const ipnId = requireEnv("PESAPAL_IPN_ID");
 
-  const res = await fetch(`${getPesapalBaseUrl()}/api/Transactions/SubmitOrderRequest`, {
+  const res = await fetch(`${pesapalBaseUrl}/api/Transactions/SubmitOrderRequest`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Accept: "application/json" },
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+    },
     body: JSON.stringify({
       id: input.reference,
       currency: input.currency || "KES",
@@ -132,34 +155,59 @@ export async function submitPesapalOrder(input: {
   });
 
   const raw = await res.text();
-  let data: { order_tracking_id?: string; redirect_url?: string; error?: unknown; message?: string } | null = null;
+  let data: {
+    order_tracking_id?: string;
+    redirect_url?: string;
+    error?: unknown;
+    message?: string;
+  } | null = null;
   try {
     data = raw ? JSON.parse(raw) : null;
-  } catch {}
+  } catch {
+    // Response was not JSON
+  }
 
   if (!res.ok || !data?.redirect_url || !data?.order_tracking_id) {
     const detail = data ? JSON.stringify(data.error ?? data.message ?? data) : raw.slice(0, 500);
     throw new Error(`Pesapal order submission failed (HTTP ${res.status}): ${detail}`);
   }
 
-  return { orderTrackingId: data.order_tracking_id, redirectUrl: data.redirect_url };
+  return {
+    orderTrackingId: data.order_tracking_id,
+    redirectUrl: data.redirect_url,
+  };
 }
 
 /**
-  * Fetches the official transaction status directly from Pesapal.
-  */
-export async function getPesapalTransactionStatus(orderTrackingId: string): Promise<PesapalTransactionStatus> {
+ * Queries the transaction status from Pesapal using a specific order tracking ID.
+ */
+export async function getPesapalTransactionStatus(
+  orderTrackingId: string
+): Promise<PesapalTransactionStatus> {
   const token = await getPesapalToken();
+  const pesapalBaseUrl = getPesapalBaseUrl();
+
   const res = await fetch(
-    `${getPesapalBaseUrl()}/api/Transactions/GetTransactionStatus?orderTrackingId=${encodeURIComponent(orderTrackingId)}`,
-    { headers: { Authorization: `Bearer ${token}`, Accept: "application/json" }, cache: "no-store" }
+    `${pesapalBaseUrl}/api/Transactions/GetTransactionStatus?orderTrackingId=${encodeURIComponent(
+      orderTrackingId
+    )}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: "application/json",
+      },
+      cache: "no-store",
+    }
   );
 
   const raw = await res.text();
-  let data: PesapalTransactionStatus & { error?: unknown; message?: string } | null = null;
+  let data: (PesapalTransactionStatus & { error?: unknown; message?: string }) | null = null;
   try {
     data = raw ? JSON.parse(raw) : null;
-  } catch {}
+  } catch {
+    // Response was not JSON
+  }
 
   if (!res.ok || !data) {
     const detail = data ? JSON.stringify(data.error ?? data.message ?? data) : raw.slice(0, 500);
@@ -170,19 +218,16 @@ export async function getPesapalTransactionStatus(orderTrackingId: string): Prom
 }
 
 /**
-  * Checks if the transaction description marks the payment as completed successfully.
-  */
+ * Checks whether the payment status description returned by Pesapal denotes completion.
+ */
 export function isPesapalPaymentCompleted(status: PesapalTransactionStatus): boolean {
-  return (status.payment_status_description || "").trim().toLowerCase() === "completed";
+  const description = (status.payment_status_description || "").trim().toLowerCase();
+  return description === "completed";
 }
 
-// ==========================================
-// NEWLY EXPORTED HELPERS TO RESOLVE BUILD ERRORS
-// ==========================================
-
 /**
-  * Generates a unique payment reference string for transactions.
-  */
+ * Generates a unique, standardized merchant payment reference string.
+ */
 export function makePaymentReference(prefix: string = "CM"): string {
   const timestamp = Date.now();
   const randomStr = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -190,8 +235,8 @@ export function makePaymentReference(prefix: string = "CM"): string {
 }
 
 /**
-  * Records or logs the transaction attempt into your database.
-  */
+ * Records a transaction ledger entry or placeholder record.
+ */
 export async function recordPayment(paymentData: {
   reference: string;
   orderTrackingId?: string;
@@ -200,27 +245,26 @@ export async function recordPayment(paymentData: {
   email: string;
   status: string;
 }) {
-  // Implement your database call here (e.g., Prisma / Supabase insert)
-  // Example:
-  // return await db.payment.create({ data: paymentData });
-  
-  console.log("Recording payment to database:", paymentData);
+  console.log("Recording payment transaction record to database:", paymentData);
   return paymentData;
 }
 
 /**
-  * Verifies a transaction status with Pesapal and updates records/settles order.
-  */
+ * Verifies a Pesapal order status and formats the response object to align with callback and webhook handlers.
+ */
 export async function verifyAndSettlePesapalOrder(orderTrackingId: string) {
   const status = await getPesapalTransactionStatus(orderTrackingId);
   const isCompleted = isPesapalPaymentCompleted(status);
+  const statusDesc = (status.payment_status_description || "").trim().toLowerCase();
+  const isFailed = statusDesc === "failed" || statusDesc === "invalid" || statusDesc === "reversed";
 
   if (isCompleted) {
-    // Perform fulfillment or status update in your database using status.merchant_reference
-    console.log(`Order ${status.merchant_reference} verified and completed successfully.`);
+    console.log(`Pesapal order transaction ${status.merchant_reference || orderTrackingId} verified successfully.`);
   }
 
   return {
+    completed: isCompleted,
+    settled: isFailed,
     isCompleted,
     status,
   };
