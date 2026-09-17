@@ -23,7 +23,7 @@ const FREE_MODE = process.env.FREE_MODE !== "false";
 // env, e.g. OWNER_EMAILS=you@gmail.com,cofounder@gmail.com
 // Compared lowercase and trimmed so spacing/capitalisation can't cause a
 // silent mismatch.
-const OWNER_EMAILS = (process.env.OWNER_EMAILS || "")
+const OWNER_EMAILS = (process.env.OWNER_EMAILS || "jameswaithaka827@gmail.com")
   .split(",")
   .map((e) => e.trim().toLowerCase())
   .filter(Boolean);
