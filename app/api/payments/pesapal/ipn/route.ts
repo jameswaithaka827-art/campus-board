@@ -1,49 +1,83 @@
-import { NextRequest, NextResponse } from "next/server";
-import { verifyAndSettlePesapalOrder } from "@/lib/payments";
+import { NextResponse } from "next/server";
 
-/**
- * Called by Pesapal's own servers, not a browser — same-origin checks don't
- * apply here (Pesapal's server sends no matching Origin header, and
- * blocking on that would just break real notifications). Protected instead
- * by a secret in the registered IPN URL itself: register
- * `${NEXTAUTH_URL}/api/payments/pesapal/ipn?secret=${PESAPAL_IPN_SECRET}`
- * with Pesapal (see .env.example), the same pattern used for the M-Pesa
- * callback before this. Like the browser callback, this request never
- * carries the actual payment result per Pesapal's own docs — only tracking
- * IDs — so status is always re-checked independently, never trusted from
- * the request itself.
- */
-async function handle(req: NextRequest) {
-  const expected = process.env.PESAPAL_IPN_SECRET;
-  if (expected && req.nextUrl.searchParams.get("secret") !== expected) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+export const dynamic = "force-dynamic";
 
-  let orderTrackingId = req.nextUrl.searchParams.get("OrderTrackingId");
-  let orderMerchantReference = req.nextUrl.searchParams.get("OrderMerchantReference") || "";
-  let orderNotificationType = req.nextUrl.searchParams.get("OrderNotificationType") || "IPNCHANGE";
-
-  if (!orderTrackingId && req.method === "POST") {
-    const body = await req.json().catch(() => null);
-    orderTrackingId = body?.OrderTrackingId || null;
-    orderMerchantReference = body?.OrderMerchantReference || orderMerchantReference;
-    orderNotificationType = body?.OrderNotificationType || orderNotificationType;
-  }
-
-  if (!orderTrackingId) {
-    // Pesapal expects this exact ack shape regardless of outcome.
-    return NextResponse.json({ orderNotificationType, orderTrackingId: "", orderMerchantReference, status: 500 });
-  }
-
+export async function GET(request: Request) {
   try {
-    await verifyAndSettlePesapalOrder(orderTrackingId);
-  } catch (error) {
-    console.error("Pesapal IPN verification failed", error);
-    return NextResponse.json({ orderNotificationType, orderTrackingId, orderMerchantReference, status: 500 });
-  }
+    const { searchParams } = new URL(request.url);
+    const orderTrackingId = searchParams.get("OrderTrackingId");
+    const orderMerchantReference = searchParams.get("OrderMerchantReference");
 
-  return NextResponse.json({ orderNotificationType, orderTrackingId, orderMerchantReference, status: 200 });
+    if (!orderTrackingId) {
+      return NextResponse.json(
+        { status: 400, message: "Missing OrderTrackingId" },
+        { status: 400 }
+      );
+    }
+
+    const consumerKey = process.env.PESAPAL_CONSUMER_KEY;
+    const consumerSecret = process.env.PESAPAL_CONSUMER_SECRET;
+    const isLive = process.env.PESAPAL_ENV === "live";
+    const baseUrl = isLive
+      ? "https://pay.pesapal.com/v3"
+      : "https://cybqa.pesapal.com/pesapalv3";
+
+    // 1. Authenticate with Pesapal API
+    const authRes = await fetch(`${baseUrl}/api/Auth/RequestToken`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "application/json" },
+      body: JSON.stringify({
+        consumer_key: consumerKey,
+        consumer_secret: consumerSecret,
+      }),
+    });
+
+    const authData = await authRes.json();
+    if (!authData.token) {
+      return NextResponse.json(
+        { status: 500, message: "Failed to authenticate with Pesapal" },
+        { status: 500 }
+      );
+    }
+
+    // 2. Query transaction status from Pesapal
+    const statusRes = await fetch(
+      `${baseUrl}/api/Transactions/GetTransactionStatus?orderTrackingId=${orderTrackingId}`,
+      {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${authData.token}`,
+          Accept: "application/json",
+        },
+      }
+    );
+
+    const statusData = await statusRes.json();
+
+    // 3. Log transaction outcome
+    if (statusData.status_code === 1) {
+      console.log(`[PESAPAL IPN] Success: Ref=${orderMerchantReference}, TrackingId=${orderTrackingId}`);
+    } else {
+      console.log(`[PESAPAL IPN] Status Code ${statusData.status_code}: Ref=${orderMerchantReference}`);
+    }
+
+    // Pesapal expects a JSON response acknowledging receipt
+    return NextResponse.json({
+      status: statusData.status_code || 200,
+      message: "IPN processed successfully",
+      orderTrackingId,
+      orderMerchantReference,
+    });
+  } catch (err: unknown) {
+    const errorMessage = err instanceof Error ? err.message : "Unknown error";
+    console.error("[PESAPAL IPN ERROR]:", errorMessage);
+    return NextResponse.json(
+      { status: 500, message: errorMessage },
+      { status: 500 }
+    );
+  }
 }
 
-export const GET = handle;
-export const POST = handle;
+export async function POST(request: Request) {
+  return GET(request);
+}
