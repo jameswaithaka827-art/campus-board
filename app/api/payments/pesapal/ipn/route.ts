@@ -1,16 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyAndSettlePesapalOrder } from "@/lib/payments";
 
-// Called by Pesapal's own servers, not a browser — same-origin checks don't
-// apply here (Pesapal's server sends no matching Origin header, and
-// blocking on that would just break real notifications). Protected instead
-// by a secret in the registered IPN URL itself: register
-// `${NEXTAUTH_URL}/api/payments/pesapal/ipn?secret=<PESAPAL_IPN_SECRET>`
-// with Pesapal (see .env.example), the same pattern used for the M-Pesa
-// callback before this. Like the browser callback, this request never
-// carries the actual payment result per Pesapal's own docs — only tracking
-// IDs — so status is always re-checked independently, never trusted from
-// the request itself.
+/**
+ * Called by Pesapal's own servers, not a browser — same-origin checks don't
+ * apply here (Pesapal's server sends no matching Origin header, and
+ * blocking on that would just break real notifications). Protected instead
+ * by a secret in the registered IPN URL itself: register
+ * `${NEXTAUTH_URL}/api/payments/pesapal/ipn?secret=${PESAPAL_IPN_SECRET}`
+ * with Pesapal (see .env.example), the same pattern used for the M-Pesa
+ * callback before this. Like the browser callback, this request never
+ * carries the actual payment result per Pesapal's own docs — only tracking
+ * IDs — so status is always re-checked independently, never trusted from
+ * the request itself.
+ */
 async function handle(req: NextRequest) {
   const expected = process.env.PESAPAL_IPN_SECRET;
   if (expected && req.nextUrl.searchParams.get("secret") !== expected) {
