@@ -1,71 +1,43 @@
 export type Plan = "free" | "pro";
 
-export interface Entitlements {
-  plan: Plan;
-  isPro: boolean;
-  canUseAIFeatures: boolean;
-  maxUploadSizeMB: number;
-  maxDailyMessages: number;
-  aiMonthlyLimit: number;
-  maxChatImages: number;
-  webSearch: boolean;
-}
-
 export const PRO_FEATURES = [
-  "Unlimited AI Messages",
-  "Advanced Web Search Integration",
-  "Higher File Upload Limits (up to 50MB)",
-  "Multi-image Vision Analysis",
-  "Priority Support",
-];
+  "300 AI actions per month",
+  "Web research mode",
+  "Up to 4 photo attachments per AI message",
+  "Advanced study analytics (when enabled)",
+  "Priority access to new James AI study tools",
+  "Expanded course and lesson storage",
+  "Pro badge on the account",
+] as const;
 
+// James AI currently runs fully free: every account gets Pro-level
+// entitlements without needing a subscription, so nobody hits a paywall.
+// Set FREE_MODE=false in env (and configure Stripe) to re-enable paid
+// gating based on actual subscriptionStatus — the Stripe integration itself
+// is untouched and ready to go the moment that's flipped back.
 const FREE_MODE = process.env.FREE_MODE !== "false";
-
-const OWNER_EMAILS = (process.env.OWNER_EMAILS || "jameswaithaka827@gmail.com")
-  .split(",")
-  .map((e) => e.trim().toLowerCase())
-  .filter(Boolean);
 
 export function isFreeMode() {
   return FREE_MODE;
 }
 
-export function isOwnerEmail(email?: string | null): boolean {
-  if (!email) return false;
-  const normalized = email.trim().toLowerCase();
-  return (
-    normalized === "jameswaithaka827@gmail.com" ||
-    OWNER_EMAILS.includes(normalized)
-  );
-}
-
-export function getPlan(subscriptionStatus?: string | null, email?: string | null): Plan {
+export function getPlan(subscriptionStatus?: string | null): Plan {
   if (FREE_MODE) return "pro";
-  if (isOwnerEmail(email)) return "pro";
-  
-  if (subscriptionStatus === "active" || subscriptionStatus === "trialing") {
-    return "pro";
-  }
-
-  return "free";
+  return subscriptionStatus === "active" || subscriptionStatus === "trialing" ? "pro" : "free";
 }
 
-export function getEntitlements(subscriptionStatus?: string | null, email?: string | null): Entitlements {
-  const plan = getPlan(subscriptionStatus, email);
-  const isPro = plan === "pro";
-
+export function getEntitlements(subscriptionStatus?: string | null) {
+  const plan = getPlan(subscriptionStatus);
   return {
     plan,
-    isPro,
-    canUseAIFeatures: true,
-    maxUploadSizeMB: isPro ? 50 : 10,
-    maxDailyMessages: isPro ? 1200 : 70,
-    aiMonthlyLimit: isPro ? 10000 : 20,
-    maxChatImages: isPro ? 10 : 2,
-    webSearch: isPro,
+    isPro: plan === "pro",
+    aiMonthlyLimit: plan === "pro" ? 300 : 20,
+    maxChatImages: plan === "pro" ? 4 : 1,
+    advancedAnalytics: plan === "pro",
+    webSearch: plan === "pro",
   };
 }
 
-export function canUsePro(subscriptionStatus?: string | null, email?: string | null): boolean {
-  return getPlan(subscriptionStatus, email) === "pro";
+export function canUsePro(subscriptionStatus?: string | null) {
+  return getPlan(subscriptionStatus) === "pro";
 }
