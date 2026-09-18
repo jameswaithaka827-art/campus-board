@@ -8,7 +8,16 @@ export interface Entitlements {
   maxDailyMessages: number;
   aiMonthlyLimit: number;
   maxChatImages: number;
+  webSearch: boolean;
 }
+
+export const PRO_FEATURES = [
+  "Unlimited AI Messages",
+  "Advanced Web Search Integration",
+  "Higher File Upload Limits (up to 50MB)",
+  "Multi-image Vision Analysis",
+  "Priority Support",
+];
 
 const FREE_MODE = process.env.FREE_MODE !== "false";
 
@@ -53,6 +62,7 @@ export function getEntitlements(subscriptionStatus?: string | null, email?: stri
     maxDailyMessages: isPro ? 1200 : 70,
     aiMonthlyLimit: isPro ? 10000 : 20,
     maxChatImages: isPro ? 10 : 2,
+    webSearch: isPro,
   };
 }
 
