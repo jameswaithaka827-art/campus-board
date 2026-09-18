@@ -7,6 +7,7 @@ export interface Entitlements {
   maxUploadSizeMB: number;
   maxDailyMessages: number;
   aiMonthlyLimit: number;
+  maxChatImages: number;
 }
 
 const FREE_MODE = process.env.FREE_MODE !== "false";
@@ -51,6 +52,7 @@ export function getEntitlements(subscriptionStatus?: string | null, email?: stri
     maxUploadSizeMB: isPro ? 50 : 10,
     maxDailyMessages: isPro ? 1200 : 70,
     aiMonthlyLimit: isPro ? 10000 : 20,
+    maxChatImages: isPro ? 10 : 2,
   };
 }
 
