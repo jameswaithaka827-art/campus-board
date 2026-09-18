@@ -174,22 +174,30 @@ export default function ChatPanel({ isPro = false, maxImages = 1 }: { isPro?: bo
             </div>
           )}
           <div className="flex gap-2 items-center">
-          <label className="cursor-pointer rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:border-white/30">📷 Photos<input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => void onImages(e.target.files)} disabled={!isPro && images.length >= 1 || imageBusy || images.length >= maxImages} /></label>
-          <input
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && sendMessage()}
-            placeholder={limitReached ? "Upgrade to keep chatting" : "Type a message..."}
-            disabled={limitReached}
-            className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 disabled:opacity-50"
-          />
-          <button
-            onClick={sendMessage}
-            disabled={loading || limitReached || imageBusy || (!input.trim() && images.length === 0)}
-            className="bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
-          >
-            Send
-          </button>
+            <label className="cursor-pointer rounded-lg border border-white/10 px-3 py-2 text-xs text-white/60 hover:border-white/30">
+              📷 Photos
+              <input type="file" accept="image/jpeg,image/png,image/webp" multiple hidden onChange={e => void onImages(e.target.files)} disabled={!isPro && images.length >= 1 || imageBusy || images.length >= maxImages} />
+            </label>
+            <input
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && sendMessage()}
+              placeholder={limitReached ? "Upgrade to keep chatting" : "Type a message..."}
+              disabled={limitReached}
+              className="flex-1 bg-black/30 border border-white/10 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-brand-500 disabled:opacity-50"
+            />
+            <button
+              onClick={sendMessage}
+              disabled={loading || limitReached || imageBusy || (!input.trim() && images.length === 0)}
+              className="bg-brand-600 hover:bg-brand-700 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-50"
+            >
+              Send
+            </button>
+          </div>
+
+          {/* Professional AI Disclaimer Note added below the input box */}
+          <div className="text-center text-[11px] text-white/40 mt-2">
+            AI is an automated assistant and can make mistakes. Verify important information.
           </div>
         </div>
       </div>
